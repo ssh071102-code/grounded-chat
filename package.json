@@ -1,0 +1,44 @@
+{
+  "name": "grounded-chat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Full-stack RAG chat with inline citations and a groundedness verifier that flags unsupported sentences.",
+  "author": "Laurin Lin",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "ingest": "tsx scripts/ingest.ts",
+    "eval": "tsx scripts/eval.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "@huggingface/transformers": "^4.2.0",
+    "next": "^16.2.10",
+    "pg": "^8.22.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@types/node": "^26.1.1",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.10",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "onnxruntime-node@1.24.3": true,
+    "protobufjs@7.6.5": true,
+    "sharp@0.34.5": true,
+    "esbuild@0.28.1": true
+  }
+}
