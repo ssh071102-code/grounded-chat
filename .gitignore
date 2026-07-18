@@ -15,3 +15,7 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# local demo corpora (not for the public repo yet)
+corpus-demo-smb/
+corpus-demo-retail/

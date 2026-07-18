@@ -6,10 +6,14 @@ import type { Chunk } from "./types";
  * Groundedness verifier.
  *
  * After an answer is generated, each sentence is scored for attribution
- * against the retrieved chunks: the sentence and the chunks are embedded with
- * the same local model used for retrieval, and the sentence's score is its
- * maximum cosine similarity across the chunks. Sentences below the threshold
- * are flagged "unsupported" in the UI.
+ * against the retrieved chunks: the sentence is embedded with the same local
+ * model used for retrieval and compared against candidate spans drawn from
+ * the chunks — every chunk sentence, every pair of adjacent sentences, and
+ * the whole chunk as a fallback. The score is the maximum cosine similarity
+ * across those spans. Sentence-level spans keep short factual claims from
+ * being diluted by unrelated text elsewhere in a large chunk; the
+ * two-sentence window catches claims that combine adjacent source facts.
+ * Sentences below the threshold are flagged "unsupported" in the UI.
  *
  * This is a deterministic, offline heuristic - not a proof of entailment.
  * Known failure modes (documented in README):
@@ -47,6 +51,27 @@ export interface VerificationReport {
   verdicts: SentenceVerdict[];
 }
 
+interface CandidateSpan {
+  chunkId: string;
+  text: string;
+}
+
+/** Sentences, adjacent-sentence pairs, and the whole chunk, per chunk. */
+function candidateSpans(chunks: Chunk[]): CandidateSpan[] {
+  const spans: CandidateSpan[] = [];
+  for (const chunk of chunks) {
+    const ss = splitSentences(chunk.text);
+    for (let i = 0; i < ss.length; i++) {
+      spans.push({ chunkId: chunk.id, text: ss[i]! });
+      if (i + 1 < ss.length) {
+        spans.push({ chunkId: chunk.id, text: `${ss[i]!} ${ss[i + 1]!}` });
+      }
+    }
+    spans.push({ chunkId: chunk.id, text: chunk.text });
+  }
+  return spans;
+}
+
 export async function verifyAnswer(
   answer: string,
   chunks: Chunk[],
@@ -76,9 +101,10 @@ export async function verifyAnswer(
   );
 
   const toEmbed = cleaned.filter((_, i) => judgeable[i]);
-  const vectors = await embedder.embed([...toEmbed, ...chunks.map((c) => c.text)]);
+  const spans = candidateSpans(chunks);
+  const vectors = await embedder.embed([...toEmbed, ...spans.map((s) => s.text)]);
   const sentenceVectors = vectors.slice(0, toEmbed.length);
-  const chunkVectors = vectors.slice(toEmbed.length);
+  const spanVectors = vectors.slice(toEmbed.length);
 
   let cursor = 0;
   report.verdicts = sentences.map((sentence, i) => {
@@ -88,12 +114,12 @@ export async function verifyAnswer(
     const vec = sentenceVectors[cursor++]!;
     let best = -1;
     let bestChunkId: string | null = null;
-    chunkVectors.forEach((chunkVec, c) => {
+    spanVectors.forEach((spanVec, c) => {
       let dot = 0;
-      for (let d = 0; d < vec.length; d++) dot += vec[d]! * chunkVec[d]!;
+      for (let d = 0; d < vec.length; d++) dot += vec[d]! * spanVec[d]!;
       if (dot > best) {
         best = dot;
-        bestChunkId = chunks[c]!.id;
+        bestChunkId = spans[c]!.chunkId;
       }
     });
     return {

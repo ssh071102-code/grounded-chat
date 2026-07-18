@@ -28,16 +28,18 @@ export class AnthropicLLM implements LLMClient {
       .map((s) => `[${s.index}] ${s.title}\n${s.text}`)
       .join("\n\n");
 
+    // Some gateways overwrite the system param; when routed through one
+    // (ANTHROPIC_BASE_URL set), carry the rules inside the user turn instead.
+    const viaGateway = !!process.env.ANTHROPIC_BASE_URL;
+    const userContent = viaGateway
+      ? `${SYSTEM_PROMPT}\n\nSources:\n\n${context}\n\nQuestion: ${question}`
+      : `Sources:\n\n${context}\n\nQuestion: ${question}`;
+
     const stream = this.client.messages.stream({
       model: this.model,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Sources:\n\n${context}\n\nQuestion: ${question}`,
-        },
-      ],
+      ...(viaGateway ? {} : { system: SYSTEM_PROMPT }),
+      messages: [{ role: "user", content: userContent }],
     });
 
     for await (const event of stream) {
