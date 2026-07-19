@@ -46,7 +46,7 @@ Now the endpoint streams a generated answer with inline `[n]` citations, then ru
 |---|---|
 | **Local-first retrieval** | Sentence-aware chunking → local MiniLM embeddings → cosine search. No API key needed to index or search. |
 | **Inline citations** | Answers cite retrieved passages as `[1] [2]`; citation chips open a source panel showing the exact chunk. |
-| **Groundedness verifier** | Each answer sentence is scored against the retrieved chunks; sentences below threshold are flagged `unsupported` in the UI. |
+| **Groundedness verifier** | Each answer sentence is scored against sentence-level spans of the retrieved chunks; sentences below threshold are flagged `unsupported` in the UI. |
 | **No-key mode** | With no key, the endpoint returns ranked passages + scores — the whole pipeline is demonstrable offline. |
 | **Pluggable store** | File-based index by default; a pgvector adapter (docker-compose included) implements the same interface. |
 | **Real eval** | `npm run eval` reports recall@k and MRR over a golden set (numbers below are the real output). |
@@ -150,7 +150,7 @@ npm run eval -- --k 10
 
 Retrieval-augmented generation reduces hallucination; it does not eliminate it. A model handed five passages can still add a fluent, plausible sentence that none of them support — and inline citations make that *worse*, because a citation next to an unsupported claim reads as evidence. The verifier exists to catch exactly that.
 
-**How it works.** After generation, the answer is split into sentences. Each sentence and each retrieved chunk is embedded with the *same* local model used for retrieval, and the sentence's score is its maximum cosine similarity across the chunks. Sentences scoring below the threshold are flagged `unsupported`; very short sentences (below a character floor) are marked `skipped` rather than judged.
+**How it works.** After generation, the answer is split into sentences. Each sentence is embedded with the *same* local model used for retrieval and compared against candidate spans drawn from the retrieved chunks — every chunk sentence, every pair of adjacent sentences, and the whole chunk as a fallback; the sentence's score is its maximum cosine similarity across those spans. Sentence-level spans keep short factual claims from being diluted by unrelated text elsewhere in a large chunk, and the two-sentence window catches claims that combine adjacent source facts (a price in one sentence, a duration in the next). Sentences scoring below the threshold are flagged `unsupported`; very short sentences (below a character floor) are marked `skipped` rather than judged.
 
 **Why this design.** It is deterministic, runs fully offline, adds no API cost, and is unit-tested with known-answer cases. It measures *lexical/semantic overlap with the sources* — a strong proxy for "is this traceable to a passage" — which is precisely the failure mode citations are supposed to guarantee against. An optional LLM-judge mode can slot in behind the same interface (and is mocked in tests).
 
