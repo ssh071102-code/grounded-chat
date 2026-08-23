@@ -1,0 +1,15 @@
+# vercel 存在 .vercelignore 时就不再读 .gitignore，所以这里必须自己列全。
+# 关键点：models/ 和 data/index/ 被 .gitignore 排除，但**必须**进部署 ——
+# 前者是 23MB 的 ONNX 权重（serverless 只读文件系统上没法运行时下载），
+# 后者是预建索引。两者都靠 next.config.ts 的 outputFileTracingIncludes 打进函数。
+node_modules
+.next
+.git
+.cache
+coverage
+corpus-*
+docs/screenshots
+tests
+*.log
+*.sse
+.env

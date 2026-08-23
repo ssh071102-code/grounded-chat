@@ -1,0 +1,54 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+*.tsbuildinfo
+
+# local artifacts
+data/
+.cache/
+coverage/
+
+# env files (commit only .env.example)
+.env
+.env.*
+!.env.example
+
+# local demo corpora (not for the public repo yet)
+
+# Corpora crawled from real businesses, the golden and probe sets built from
+# them, and acceptance transcripts. This repository is public; those carry a
+# client's published text, their owner's name and their phone number, as well
+# as which businesses were looked at. The bundled corpus/ is public-domain
+# prose for exactly this reason.
+corpus-*/
+!corpus/
+scripts/golden-*.ts
+scripts/probes-*.ts
+scripts/calibration-*.ts
+answers-*.txt
+prod-*.txt
+final-*.txt
+sweep*.txt
+cmp-*.txt
+v2-*.txt
+v3-*.txt
+cross-vertical.txt
+
+# local model weights (shipped to deploys via .vercelignore, not to git)
+models/
+
+.vercel
+
+# acceptance-run transcripts and scratch probes (regenerate with npm run answers)
+answers-*.txt
+cmp-*.txt
+cross-vertical.txt
+sweep*.txt
+final-review*.txt
+v2-*.txt
+prod-*.txt
+*.sse
+*.log
