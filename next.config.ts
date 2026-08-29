@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   // bundle. Both are read at runtime by path, so name them explicitly.
   // Harmless when those directories are absent: local dev reads .cache instead.
   outputFileTracingIncludes: {
+    // The widget surface renders the same chat, so it needs the same index the
+    // tracer cannot see: it is read at runtime by path.
+    "/embed": ["./data/index/**/*"],
     "/api/chat": [
       "./models/**/*",
       "./data/index/**/*",

@@ -184,6 +184,72 @@ The pgvector adapter is unit-tested against the shared contract; the integration
 
 ---
 
+## Embedding it on a site
+
+The chat also runs as a widget on the site it answers for. One line in the page
+template, before `</body>`:
+
+```html
+<script src="https://YOUR-DEPLOYMENT/widget.js" defer></script>
+```
+
+That renders a launcher button; the panel it opens is an iframe pointing at
+`/embed` on the deployment. Nothing else is installed, and no CORS configuration
+is needed on either side — the chat request is same-origin inside the frame.
+
+| attribute | default | what it does |
+|---|---|---|
+| `data-label` | `Ask us` | Text on the launcher |
+| `data-title` | the label | Accessible name of the frame |
+| `data-side` | `right` | `left` moves it for a site whose own controls sit bottom-right |
+| `data-accent` | `#111827` | Launcher colour; hex or a plain CSS colour name |
+
+The launcher lives in a shadow root, so the host page's `button {}` rules cannot
+reach it, and it is a real `<button>` — replacing it with a styled `<div>` would
+take it out of the accessibility tree and off the keyboard. The iframe is built
+on first open, so a page nobody clicks costs the visitor nothing and never
+touches the model endpoint.
+
+### Who may frame it
+
+Set `EMBED_FRAME_ANCESTORS` to the origins allowed to embed this deployment,
+space- or comma-separated, each written as a full origin:
+
+```
+EMBED_FRAME_ANCESTORS="https://example.com https://www.example.com"
+```
+
+`/embed` sends that as `Content-Security-Policy: frame-ancestors`. **Unset means
+`'none'`** — refusing to be framed is the safe default, because the alternative
+is serving the assistant from any page on the internet on a key you are paying
+for. `www` is not added for you: `example.com` and `www.example.com` are
+different origins that can have different owners, so both are listed only if
+both are written. Ports are kept as configured, and plaintext `http://` is
+accepted for loopback only.
+
+#### What this does not cover
+
+`frame-ancestors` decides whether a browser will render `/embed` in a frame.
+That is the whole of it:
+
+- **It does not protect `/api/chat`.** That endpoint is a public POST that spends
+  the deployment's model key. A server-to-server call, a reverse proxy that
+  strips the header, or opening `/embed` as a top-level page all reach it without
+  framing anything. `RATE_LIMIT_PER_WINDOW` is a per-address ceiling, not an
+  economic identity; there is no per-site quota or spend cap here.
+- **The deployed headers are what count.** A CDN or proxy can add a second CSP
+  (they intersect — an inherited `frame-ancestors 'self'` blocks the widget
+  everywhere) or restore `X-Frame-Options`. Check the response as served.
+- **The host site trusts whoever serves `widget.js`.** There is no
+  Subresource Integrity hash on that tag, and there deliberately cannot be a
+  useful one: the loader is meant to be updated without editing every site that
+  embeds it, and a pinned hash would break them all on the next change. That is
+  the normal trade for this class of widget, but it is a trade — put it on a
+  deployment you control, and treat write access to it as write access to every
+  page that embeds it.
+
+---
+
 ## Limitations
 
 - **Local-embedding quality ceiling.** `all-MiniLM-L6-v2` is 384-dimensional and small. It is excellent for a zero-key, offline demo, but a hosted embedding model would lift recall on paraphrased queries. The eval misses are a direct, honest read of this ceiling.
