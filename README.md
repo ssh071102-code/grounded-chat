@@ -134,10 +134,14 @@ $ curl -s -X POST localhost:3000/api/chat \
 
 | metric | k=3 | k=5 | k=10 |
 |---|---|---|---|
-| **recall@k** | 0.733 (11/15) | 0.800 (12/15) | 0.867 (13/15) |
-| **MRR** | 0.667 | 0.680 | 0.691 |
+| **recall@k** | 0.867 (13/15) | 0.867 (13/15) | 1.000 (15/15) |
+| **MRR** | 0.789 | 0.789 | 0.810 |
 
-These are the **actual** measured numbers from `xenova/all-MiniLM-L6-v2` (quantized) on this corpus — not aspirational. Ten of fifteen questions retrieve their target passage at rank 1. The misses are honest: paraphrased questions like *"What subject does Darwin devote the first chapter to?"* and *"How should terms in a series be punctuated?"* fall outside the top-k because a 384-dimension local model has a real quality ceiling (see Limitations). Re-run it yourself:
+Measured 2026-08-31 on the hybrid retriever (`hybrid (max 2/doc)`). k=3 and k=5 tie
+because the per-document cap means widening from three to five pulls in no document
+the top three had not already reached.
+
+These are the **actual** measured numbers from `xenova/all-MiniLM-L6-v2` (quantized) on this corpus — not aspirational. Eleven of fifteen questions retrieve their target passage at rank 1. The misses are honest: paraphrased questions like *"What subject does Darwin devote the first chapter to?"* and *"How should terms in a series be punctuated?"* fall outside the top five because a 384-dimension local model has a real quality ceiling (see Limitations). Both are found by k=10, at rank 6 and rank 7. Re-run it yourself:
 
 ```bash
 npm run eval            # k=5
