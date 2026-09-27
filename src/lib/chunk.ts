@@ -12,6 +12,8 @@ import type { Chunk } from "./types";
  *    target becomes its own oversized chunk.
  * 3. Adjacent chunks overlap by the last `overlapSentences` sentences of the
  *    previous chunk, so facts that straddle a boundary remain retrievable.
+ * 4. Each chunk is titled with the nearest heading above it (see headingOf),
+ *    falling back to the document title before the first heading.
  */
 export interface ChunkOptions {
   targetChars: number;
@@ -59,6 +61,48 @@ export function splitSentences(text: string): string[] {
   return sentences;
 }
 
+/** Longest paragraph, in characters, that can still count as a heading. */
+const MAX_HEADING_CHARS = 120;
+
+/** "III.", "CHAPTER I.", "Part 2": a label that the next paragraph completes. */
+const NUMBER_ONLY = /^(?:(?:chapter|part|book|section)\s+)?[ivxlcdm\d]+\.?$/i;
+
+/**
+ * If a paragraph is a heading, return its text; otherwise null.
+ *
+ * Two shapes are recognised: a Markdown heading line (`## Rules of usage`),
+ * and the plain-text convention of the bundled Gutenberg texts, a short
+ * paragraph of at most two lines with no lowercase letters
+ * (`II. ELEMENTARY RULES OF USAGE`). Requiring three capital letters keeps
+ * formulas and footnote markers such as `[3]` out.
+ */
+export function headingOf(paragraph: string): string | null {
+  const lines = paragraph
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return null;
+
+  const markdown = lines
+    .map((l) => /^#{1,6}\s+(.+?)\s*#*$/.exec(l)?.[1])
+    .filter((h): h is string => Boolean(h));
+  if (markdown.length > 0) return markdown.at(-1)!.replace(/\.$/, "");
+
+  if (lines.length > 2) return null;
+  const joined = lines.join(" ");
+  if (joined.length > MAX_HEADING_CHARS) return null;
+  if (/\p{Ll}/u.test(joined)) return null;
+  if ((joined.match(/\p{Lu}/gu) ?? []).length < 3 && !NUMBER_ONLY.test(joined)) {
+    return null;
+  }
+  return joined.replace(/\.$/, "");
+}
+
+/**
+ * Split a document into chunks. `title` is the fallback title; each chunk is
+ * titled with the nearest heading above its first new (non-overlap) sentence,
+ * so a chunk from chapter three is labelled with chapter three.
+ */
 export function chunkDocument(
   docId: string,
   title: string,
@@ -67,12 +111,33 @@ export function chunkDocument(
 ): Chunk[] {
   const { targetChars, overlapSentences } = options;
   const paragraphs = text.split(/\r?\n\s*\r?\n+/);
-  const sentences = paragraphs.flatMap((p) => splitSentences(p));
+
+  const sentences: { text: string; heading: string }[] = [];
+  let heading = title;
+  let pendingLabel: string | null = null;
+  for (const paragraph of paragraphs) {
+    const found = headingOf(paragraph);
+    if (found !== null) {
+      if (pendingLabel !== null && !NUMBER_ONLY.test(found)) {
+        heading = `${pendingLabel}. ${found}`;
+        pendingLabel = null;
+      } else if (NUMBER_ONLY.test(found)) {
+        heading = found;
+        pendingLabel = found;
+      } else {
+        heading = found;
+      }
+    } else if (paragraph.trim()) {
+      pendingLabel = null;
+    }
+    for (const s of splitSentences(paragraph)) sentences.push({ text: s, heading });
+  }
 
   const chunks: Chunk[] = [];
   let current: string[] = [];
   let currentLen = 0;
   let freshSentences = 0; // sentences added since the last flush (excludes overlap)
+  let chunkTitle = title; // heading at the first fresh sentence of the chunk
 
   const flush = () => {
     if (freshSentences === 0) return;
@@ -81,7 +146,7 @@ export function chunkDocument(
     chunks.push({
       id: `${docId}#${chunks.length}`,
       docId,
-      title,
+      title: chunkTitle,
       index: chunks.length,
       text: body,
     });
@@ -92,11 +157,12 @@ export function chunkDocument(
   };
 
   for (const sentence of sentences) {
-    if (currentLen > 0 && currentLen + sentence.length + 1 > targetChars) {
+    if (currentLen > 0 && currentLen + sentence.text.length + 1 > targetChars) {
       flush();
     }
-    current.push(sentence);
-    currentLen += sentence.length + 1;
+    if (freshSentences === 0) chunkTitle = sentence.heading;
+    current.push(sentence.text);
+    currentLen += sentence.text.length + 1;
     freshSentences += 1;
   }
   flush();

@@ -98,6 +98,38 @@ describe("chunkDocument", () => {
     expect(a).toEqual(b);
   });
 
+  it("titles each chunk with the nearest heading above where it starts", () => {
+    const body = (tag: string) =>
+      Array.from({ length: 4 }, (_, i) => `${tag} fact ${i} is stated in a full sentence here.`).join(" ");
+    const text = [
+      "Opening line that is prose, not a heading.",
+      "CHAPTER I.",
+      "VARIATION UNDER DOMESTICATION.",
+      body("Pigeon"),
+      "## Rules of usage",
+      body("Comma"),
+    ].join("\n\n");
+    const chunks = chunkDocument("doc.txt", "Doc", text, {
+      targetChars: 120,
+      overlapSentences: 0,
+    });
+    const titleOf = (needle: string) => chunks.find((c) => c.text.startsWith(needle))!.title;
+    // Before any heading the document title is the fallback.
+    expect(titleOf("Opening line")).toBe("Doc");
+    // A bare numeral paragraph is joined to the heading that follows it.
+    expect(titleOf("Pigeon fact 2")).toBe("CHAPTER I. VARIATION UNDER DOMESTICATION");
+    expect(titleOf("Comma fact 2")).toBe("Rules of usage");
+  });
+
+  it("does not treat short lowercase lines or formulas as headings", () => {
+    const text = ["INTRO", "image001", "_x′_ = _x_ – _vt_", "Body sentence one. Body two."].join("\n\n");
+    const chunks = chunkDocument("doc.txt", "Doc", text, {
+      targetChars: 20,
+      overlapSentences: 0,
+    });
+    expect(chunks.at(-1)!.title).toBe("INTRO");
+  });
+
   it("returns no chunks for empty input", () => {
     expect(chunkDocument("doc.txt", "Doc", "")).toEqual([]);
     expect(chunkDocument("doc.txt", "Doc", "\n\n  \n")).toEqual([]);

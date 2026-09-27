@@ -77,7 +77,11 @@ async function main() {
   );
 }
 
-/** Use the first non-empty line as a title if it looks like a heading. */
+/**
+ * Document title: the first non-empty line if it looks like a heading. Chunks
+ * get their own section heading from chunkDocument; this is only the fallback
+ * for text above the first heading.
+ */
 function deriveTitle(fileName: string, text: string): string {
   const firstLine = text.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
   if (firstLine && firstLine.length <= 80) {
