@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { embedCsp } from "@/lib/widget";
 
 /** Framing policy for the embedded widget. */
@@ -6,7 +6,7 @@ export const config = {
   matcher: "/embed",
 };
 
-export function middleware(_request: NextRequest) {
+export function middleware() {
   const response = NextResponse.next();
   response.headers.set(
     "Content-Security-Policy",

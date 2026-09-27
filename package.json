@@ -13,10 +13,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "ingest": "tsx scripts/ingest.ts",
-    "eval": "tsx scripts/eval.ts",
-    "answers": "tsx scripts/answers.ts",
-    "check-index": "tsx scripts/check-index.ts",
-    "crawl": "tsx scripts/crawl.ts"
+    "eval": "tsx scripts/eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
