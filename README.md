@@ -1,8 +1,10 @@
 # grounded-chat
 
-**A full-stack RAG chat app that refuses to make things up — streaming answers with inline citations and a groundedness verifier that flags any sentence the sources don't support.**
+[![ci](https://github.com/ssh071102-code/grounded-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/ssh071102-code/grounded-chat/actions/workflows/ci.yml)
 
-Most RAG demos retrieve some passages, ask an LLM to "answer using the context," and trust the result. grounded-chat adds the step that actually matters for a demanding user: after the answer is generated, every sentence is scored against the retrieved passages and anything the sources don't support is **visibly flagged in the UI**. And because the whole retrieval pipeline runs on local embeddings, you can clone this repo and watch it work in 60 seconds **with zero API keys**.
+**A Next.js RAG chat app that streams answers with inline citations and flags every sentence the retrieved sources do not support.**
+
+The app retrieves passages, asks the model to answer from them with `[n]` citations, and then checks the answer: each sentence is scored against the retrieved passages, and sentences the sources do not support are **flagged in the UI**. Indexing and search use local embeddings, so you can clone the repo and see it work in about a minute **with no API key**.
 
 ![Answer with inline citations and a flagged unsupported sentence](docs/screenshots/gc-03-verifier.png)
 
@@ -12,7 +14,7 @@ Most RAG demos retrieve some passages, ask an LLM to "answer using the context,"
 
 ## Quick start
 
-### No-key path (recommended first — fully offline)
+### No-key path (recommended first, fully offline)
 
 No API key, no database, no Docker. Local MiniLM embeddings power indexing and search.
 
@@ -22,7 +24,7 @@ npm run ingest -- corpus        # builds the vector index (downloads the ~23 MB 
 npm run dev                     # http://localhost:3000
 ```
 
-With no `ANTHROPIC_API_KEY` set, the chat endpoint returns **retrieval-only** results — the top passages ranked by cosine similarity, with scores — so you see the full retrieval pipeline work end to end. Want to see the answer + verifier pipeline without a key? Run the bundled mock model:
+With no `ANTHROPIC_API_KEY` set, the chat endpoint returns **retrieval-only** results: the top passages with their cosine scores, so you can see the retrieval pipeline work end to end. To see the answer and verifier pipeline without a key, run the bundled mock model:
 
 ```bash
 LLM_MODE=mock npm run dev       # scripted answer that plants one fabrication for the verifier to catch
@@ -44,12 +46,13 @@ Now the endpoint streams a generated answer with inline `[n]` citations, then ru
 
 | | |
 |---|---|
-| **Local-first retrieval** | Sentence-aware chunking → local MiniLM embeddings → cosine search. No API key needed to index or search. |
-| **Inline citations** | Answers cite retrieved passages as `[1] [2]`; citation chips open a source panel showing the exact chunk. |
-| **Groundedness verifier** | Each answer sentence is scored against sentence-level spans of the retrieved chunks; sentences below threshold are flagged `unsupported` in the UI. |
-| **No-key mode** | With no key, the endpoint returns ranked passages + scores — the whole pipeline is demonstrable offline. |
+| **Local-first retrieval** | Sentence-aware chunking, local MiniLM embeddings, cosine search. Optional hybrid mode adds BM25 keyword search fused by reciprocal rank. No API key needed to index or search. |
+| **Inline citations** | Answers cite retrieved passages as `[1] [2]`; citation chips open a source panel showing the exact chunk and its section heading. |
+| **Groundedness verifier** | Each answer sentence is scored against sentence-level spans of the retrieved chunks; numbers and proper nouns must appear literally. Sentences that fail are flagged `unsupported` in the UI. |
+| **Follow-up questions** | The browser sends recent turns with each request; the last two questions are folded into the retrieval query and the model sees the conversation. Nothing is stored on the server. |
+| **No-key mode** | With no key, the endpoint returns ranked passages and scores, so the retrieval pipeline can be demonstrated offline. |
 | **Pluggable store** | File-based index by default; a pgvector adapter (docker-compose included) implements the same interface. |
-| **Real eval** | `npm run eval` reports recall@k and MRR over a golden set (numbers below are the real output). |
+| **Eval** | `npm run eval` reports recall@k and MRR over a golden set. The numbers below are its output. |
 
 ---
 
@@ -58,23 +61,30 @@ Now the endpoint streams a generated answer with inline `[n]` citations, then ru
 ```mermaid
 flowchart LR
   subgraph ingest["npm run ingest -- <dir>"]
-    docs[".md / .txt files"] --> chunk["sentence-aware\nchunking + overlap"]
+    docs[".md / .txt files"] --> chunk["sentence-aware\nchunking + overlap\n(title = nearest heading)"]
     chunk --> emb1["local MiniLM\nembeddings"]
     emb1 --> store[("vector store\nfile | pgvector")]
   end
 
   subgraph query["POST /api/chat"]
-    q["question"] --> emb2["local MiniLM\nembedding"]
-    emb2 --> knn["top-k cosine search"]
+    q["question + recent turns"] --> emb2["local MiniLM\nembedding"]
+    emb2 --> knn["dense top-k\n(or hybrid: dense + BM25, RRF, 2/doc cap)"]
     store --> knn
     knn -->|"no API key"| ro["retrieval-only\nJSON: passages + scores"]
     knn -->|"API key set"| gen["Anthropic SDK\nstreamed answer + [n] citations"]
-    gen --> verify["groundedness verifier\n(embedding similarity per sentence)"]
+    gen --> verify["groundedness verifier\n(similarity + literal specifics)"]
     verify --> sse["SSE: meta - delta - verification - done"]
   end
 ```
 
-The retrieval path is identical in both modes — only the final generation + verification step is gated on the API key. Everything except answer generation runs locally.
+The retrieval path is identical in both modes; only generation and verification depend on the API key. Everything except answer generation runs locally.
+
+### Retrieval modes
+
+- **Dense (default).** The query is embedded and the top-k chunks by cosine similarity are returned.
+- **Hybrid (`RETRIEVAL_MODE=hybrid`).** Dense and BM25 each return 20 candidates (`RETRIEVAL_CANDIDATES`), the two rankings are merged with reciprocal rank fusion, and no document may contribute more than two chunks (`RETRIEVAL_MAX_PER_DOC`). Scores shown in the UI stay cosine similarity, including for chunks only BM25 found.
+
+The chat route and `npm run eval` call the same `retrieve()` function, so eval numbers describe the code path the app runs. Which mode wins depends on the corpus: hybrid scores higher on the bundled books (see Eval), while on a separate corpus of short business web pages, where many pages repeat the same boilerplate, dense scored higher. That is why the app defaults to dense.
 
 **Layout**
 
@@ -84,22 +94,25 @@ scripts/
   ingest.ts             npm run ingest -- <dir>
   eval.ts, golden.ts    npm run eval  (golden set + recall@k / MRR)
 src/lib/
-  chunk.ts              sentence-aware chunking
+  chunk.ts              sentence-aware chunking, per-chunk section titles
   embed/local.ts        MiniLM embedder (Transformers.js, local)
+  retrieve.ts           dense / hybrid retrieval (fuse.ts, lexical.ts)
+  conversation.ts       history parsing and the follow-up retrieval query
   store/                VectorStore interface + file and pgvector adapters
   verify.ts             groundedness verifier
   llm/                  Anthropic + mock LLM behind one interface
   chat.ts               framework-agnostic chat pipeline (unit-tested)
-src/app/api/chat/route.ts   Next.js route handler (streaming)
+src/app/api/chat/route.ts   Next.js route handler (streaming, rate-limited)
 src/components/Chat.tsx      streaming chat UI
-tests/                  vitest: chunking, store contract, verifier, chat route
+public/widget.js             one-line embed loader
+tests/                  vitest
 ```
 
 ---
 
-## Real terminal transcript
+## Terminal transcript
 
-Ingestion and a retrieval-only query, captured from this repo (no API key):
+Ingestion and a retrieval-only query (default dense mode, no API key), captured from this repo. The `sources` entries are abbreviated; the full response also carries `docId`, `title` and `from` for each passage.
 
 ```console
 $ npm run ingest -- corpus
@@ -107,7 +120,7 @@ $ npm run ingest -- corpus
   einstein-relativity.txt: 84 chunks (PART I: THE SPECIAL THEORY OF RELATIVITY)
   strunk-elements-of-style.txt: 67 chunks (I. INTRODUCTORY)
 embedding 254 chunks with xenova/all-MiniLM-L6-v2#q8 ...
-indexed 254 chunks from 3 documents into the file store in 4.9s
+indexed 254 chunks from 3 documents into the file store in 5.9s
 
 $ curl -s -X POST localhost:3000/api/chat \
     -H 'content-type: application/json' \
@@ -116,66 +129,83 @@ $ curl -s -X POST localhost:3000/api/chat \
   "mode": "retrieval-only",
   "question": "Why does Strunk recommend the active voice?",
   "sources": [
-    { "index": 1, "id": "strunk-elements-of-style.txt#32", "score": 0.297,
+    { "index": 1, "id": "strunk-elements-of-style.txt#32", "score": 0.2973,
+      "title": "III. ELEMENTARY PRINCIPLES OF COMPOSITION",
       "text": "The habitual use of the active voice makes for forcible writing. This is true not only in narrative ..." },
-    { "index": 2, "id": "strunk-elements-of-style.txt#29", "score": 0.235,
+    { "index": 2, "id": "strunk-elements-of-style.txt#29", "score": 0.2355,
+      "title": "III. ELEMENTARY PRINCIPLES OF COMPOSITION",
       "text": "The campaign opened with a series of reverses. ..." },
-    { "index": 3, "id": "strunk-elements-of-style.txt#9",  "score": 0.205,
+    { "index": 3, "id": "strunk-elements-of-style.txt#9",  "score": 0.2053,
+      "title": "II. ELEMENTARY RULES OF USAGE",
       "text": "The clause adds, parenthetically, a statement supplementing that in the main clause. ..." }
   ]
 }
 ```
 
+The document names in parentheses during ingestion are each file's first heading. Each chunk is titled with the nearest heading above it, as the `title` fields show.
+
 ---
 
-## Eval — real numbers
+## Eval
 
-`npm run eval` runs 15 golden question → relevant-passage pairs over the bundled corpus. Each question's anchor phrase is resolved to the ground-truth chunk(s) at eval time, the question is retrieved, and rank of the first relevant chunk is scored.
+`npm run eval` runs 15 golden question and relevant-passage pairs over the bundled corpus. Each question's anchor phrase is resolved to the ground-truth chunk(s) at eval time, the question is retrieved, and the rank of the first relevant chunk is scored. `npm run eval` scores hybrid retrieval unless you pass `--mode dense`.
+
+**Hybrid** (`--mode hybrid`, max 2 chunks per document):
 
 | metric | k=3 | k=5 | k=10 |
 |---|---|---|---|
 | **recall@k** | 0.867 (13/15) | 0.867 (13/15) | 1.000 (15/15) |
 | **MRR** | 0.789 | 0.789 | 0.810 |
 
-Measured 2026-08-31 on the hybrid retriever (`hybrid (max 2/doc)`). k=3 and k=5 tie
-because the per-document cap means widening from three to five pulls in no document
-the top three had not already reached.
+**Dense** (`--mode dense`, the app's default):
 
-These are the **actual** measured numbers from `xenova/all-MiniLM-L6-v2` (quantized) on this corpus — not aspirational. Eleven of fifteen questions retrieve their target passage at rank 1. The misses are honest: paraphrased questions like *"What subject does Darwin devote the first chapter to?"* and *"How should terms in a series be punctuated?"* fall outside the top five because a 384-dimension local model has a real quality ceiling (see Limitations). Both are found by k=10, at rank 6 and rank 7. Re-run it yourself:
+| metric | k=3 | k=5 | k=10 |
+|---|---|---|---|
+| **recall@k** | 0.733 (11/15) | 0.800 (12/15) | 0.867 (13/15) |
+| **MRR** | 0.667 | 0.680 | 0.688 |
+
+Measured 2026-09-27 with `xenova/all-MiniLM-L6-v2` (quantized). In hybrid mode k=3 and k=5 tie because the per-document cap means widening from three to five pulls in no document the top three had not already reached.
+
+With hybrid retrieval, eleven of fifteen questions retrieve their target passage at rank 1. The two misses at k=5 are paraphrased questions: *"What subject does Darwin devote the first chapter to?"* and *"How should terms in a series be punctuated?"*. A small 384-dimension local model does not match them closely enough (see Limitations). Both are found by k=10, at rank 6 and rank 7. To reproduce:
 
 ```bash
-npm run eval            # k=5
-npm run eval -- --k 10
+npm run eval -- --k 5                 # hybrid
+npm run eval -- --k 5 --mode dense    # dense
 ```
 
 ---
 
 ## Why a verifier (design note)
 
-Retrieval-augmented generation reduces hallucination; it does not eliminate it. A model handed five passages can still add a fluent, plausible sentence that none of them support — and inline citations make that *worse*, because a citation next to an unsupported claim reads as evidence. The verifier exists to catch exactly that.
+Retrieval-augmented generation reduces hallucination but leaves some. A model handed five passages can still add a fluent, plausible sentence that none of them support, and inline citations make that worse, because a citation next to an unsupported claim reads as evidence. The verifier is there to catch that case.
 
-**How it works.** After generation, the answer is split into sentences. Each sentence is embedded with the *same* local model used for retrieval and compared against candidate spans drawn from the retrieved chunks — every chunk sentence, every pair of adjacent sentences, and the whole chunk as a fallback; the sentence's score is its maximum cosine similarity across those spans. Sentence-level spans keep short factual claims from being diluted by unrelated text elsewhere in a large chunk, and the two-sentence window catches claims that combine adjacent source facts (a price in one sentence, a duration in the next). Sentences scoring below the threshold are flagged `unsupported`; very short sentences (below a character floor) are marked `skipped` rather than judged.
+**How it works.** After generation, the answer is split into sentences. Each sentence is embedded with the same local model used for retrieval and compared against candidate spans drawn from the retrieved chunks: every chunk sentence, every pair of adjacent sentences, and the whole chunk as a fallback. The sentence's score is its maximum cosine similarity across those spans. Sentence-level spans keep short factual claims from being diluted by unrelated text elsewhere in a large chunk, and the two-sentence window catches claims that combine adjacent source facts (a price in one sentence, a duration in the next).
 
-**Why this design.** It is deterministic, runs fully offline, adds no API cost, and is unit-tested with known-answer cases. It measures *lexical/semantic overlap with the sources* — a strong proxy for "is this traceable to a passage" — which is precisely the failure mode citations are supposed to guarantee against. An optional LLM-judge mode can slot in behind the same interface (and is mocked in tests).
+Each sentence then gets one of four statuses:
 
-**Threshold.** The default is `0.55`. On this corpus with MiniLM, sentences copied or closely paraphrased from a chunk score well above it, while off-topic fabrications score well below (the planted balloon sentence in mock mode lands far under). The threshold is deliberately exposed and documented rather than hidden — it is a precision/recall dial, not a constant of nature.
+- **supported**: every number, time and proper noun in it appears literally in the passages; or, when it has none of those, it scores at or above the threshold.
+- **unsupported**: it contains a number or name the passages do not contain, or it has none and scores below the threshold. A made-up price inside an otherwise on-topic sentence scores high on similarity, so specifics are checked literally instead.
+- **unverifiable**: a closing or framing sentence (for example an invitation to get in touch) that asserts nothing checkable.
+- **skipped**: too short to judge.
 
-**Honest failure modes.** The verifier is a heuristic, not a proof of entailment:
+**Why this design.** It is deterministic, runs offline, adds no API cost, and is unit-tested with known-answer cases. It measures overlap with the sources, which is a good proxy for "is this traceable to a passage", the property citations are supposed to guarantee. An LLM-judge mode could replace it behind the same `verifyAnswer` interface.
 
-- **Negation blindness** — *"X causes Y"* and *"X does not cause Y"* embed closely, so a contradicted claim can still score as supported. Embedding similarity does not model logical entailment.
-- **False-positive flags** — aggressive paraphrase or multi-hop synthesis can dip below threshold even when genuinely grounded, flagging a good sentence.
-- **Proxy, not truth** — it rewards overlap with the sources, not factual correctness. A sentence that faithfully echoes a *wrong* source passage scores as supported.
+**Threshold.** The default is `0.55`. On this corpus with MiniLM, sentences copied or closely paraphrased from a chunk score well above it, while off-topic fabrications score well below (the planted balloon sentence in mock mode lands far under). The threshold is exposed and documented because it trades precision against recall. `npm run eval -- --calibrate <module>` sweeps it over a labelled set.
 
-For an LLM-judge upgrade path, the same `verifyAnswer` seam swaps the embedding heuristic for a model call without touching the UI or the route.
+**Failure modes.** The verifier is a heuristic and fails in known ways:
+
+- **Negation blindness.** *"X causes Y"* and *"X does not cause Y"* embed closely, so a contradicted claim can still score as supported.
+- **False-positive flags.** Heavy paraphrase or multi-hop synthesis can dip below threshold even when the sentence is grounded.
+- **Overlap is a proxy for truth.** A sentence that faithfully echoes a wrong source passage scores as supported.
 
 ---
 
 ## Storage adapters (file vs pgvector)
 
-Both stores implement one `VectorStore` interface and are exercised by the **same contract test suite** (`tests/helpers/store-contract.ts`), so the adapters are provably interchangeable.
+Both stores implement one `VectorStore` interface and run the **same contract test suite** (`tests/helpers/store-contract.ts`), so the adapters are interchangeable.
 
-- **File store (default).** Chunk metadata in `index.json`, vectors as raw `Float32` in `vectors.bin`. Queries are an exact brute-force cosine scan over the whole matrix. This is honest about scale: it is correct and fast for corpora up to tens of thousands of chunks (the bundled corpus is 254), with no dependencies and no server. It is *not* an approximate-nearest-neighbour index — for millions of vectors you would feel the linear scan.
-- **pgvector adapter.** Same interface, backed by Postgres + [pgvector](https://github.com/pgvector/pgvector) with an HNSW index and cosine distance. Use it when the corpus outgrows a single-process brute-force scan or when you want the index to live in a shared database.
+- **File store (default).** Chunk metadata in `index.json`, vectors as raw `Float32` in `vectors.bin`. Queries are an exact brute-force cosine scan over the whole matrix. It is correct and fast for corpora up to tens of thousands of chunks (the bundled corpus is 254), with no dependencies and no server. It is not an approximate-nearest-neighbour index, so for millions of vectors the linear scan becomes the bottleneck.
+- **pgvector adapter.** Same interface, backed by Postgres + [pgvector](https://github.com/pgvector/pgvector) with an HNSW index and cosine distance. Use it when the corpus outgrows a single-process scan or when you want the index in a shared database.
 
 ```bash
 docker compose up -d
@@ -184,22 +214,19 @@ npm run ingest -- corpus        # builds the index in Postgres instead of on dis
 npm run dev
 ```
 
-The pgvector adapter is unit-tested against the shared contract; the integration test runs only when `PGVECTOR_URL` is set (and Docker is available) and self-skips otherwise, so the default `npm test` stays fully offline. Docker was not available in the environment where this repo was built, so the pgvector suite is exercised via the shared contract but the numbers above come from the file store.
+The pgvector integration tests run only when `PGVECTOR_URL` is set and skip otherwise, so the default `npm test` stays offline. Those are the 9 skipped tests in a default run. The eval numbers above come from the file store.
 
 ---
 
 ## Embedding it on a site
 
-The chat also runs as a widget on the site it answers for. One line in the page
-template, before `</body>`:
+The chat also runs as a widget on the site it answers for. One line in the page template, before `</body>`:
 
 ```html
 <script src="https://YOUR-DEPLOYMENT/widget.js" defer></script>
 ```
 
-That renders a launcher button; the panel it opens is an iframe pointing at
-`/embed` on the deployment. Nothing else is installed, and no CORS configuration
-is needed on either side — the chat request is same-origin inside the frame.
+That renders a launcher button; the panel it opens is an iframe pointing at `/embed` on the deployment. Nothing else is installed, and no CORS configuration is needed on either side, because the chat request is same-origin inside the frame.
 
 | attribute | default | what it does |
 |---|---|---|
@@ -208,64 +235,42 @@ is needed on either side — the chat request is same-origin inside the frame.
 | `data-side` | `right` | `left` moves it for a site whose own controls sit bottom-right |
 | `data-accent` | `#111827` | Launcher colour; hex or a plain CSS colour name |
 
-The launcher lives in a shadow root, so the host page's `button {}` rules cannot
-reach it, and it is a real `<button>` — replacing it with a styled `<div>` would
-take it out of the accessibility tree and off the keyboard. The iframe is built
-on first open, so a page nobody clicks costs the visitor nothing and never
-touches the model endpoint.
+The launcher lives in a shadow root, so the host page's `button {}` rules cannot reach it, and it is a native `<button>`, which keeps it in the accessibility tree and reachable by keyboard. The iframe is built on first open, so a page nobody clicks costs the visitor nothing and never touches the model endpoint.
 
 ### Who may frame it
 
-Set `EMBED_FRAME_ANCESTORS` to the origins allowed to embed this deployment,
-space- or comma-separated, each written as a full origin:
+Set `EMBED_FRAME_ANCESTORS` to the origins allowed to embed this deployment, space- or comma-separated, each written as a full origin:
 
 ```
 EMBED_FRAME_ANCESTORS="https://example.com https://www.example.com"
 ```
 
-`/embed` sends that as `Content-Security-Policy: frame-ancestors`. **Unset means
-`'none'`** — refusing to be framed is the safe default, because the alternative
-is serving the assistant from any page on the internet on a key you are paying
-for. `www` is not added for you: `example.com` and `www.example.com` are
-different origins that can have different owners, so both are listed only if
-both are written. Ports are kept as configured, and plaintext `http://` is
-accepted for loopback only.
+`/embed` sends that as `Content-Security-Policy: frame-ancestors`. **Unset means `'none'`.** Refusing to be framed is the safe default, because the alternative is serving the assistant from any page on the internet on a key you are paying for. `www` is not added for you: `example.com` and `www.example.com` are different origins that can have different owners, so both are listed only if both are written. Ports are kept as configured, and plaintext `http://` is accepted for loopback only.
 
 #### What this does not cover
 
-`frame-ancestors` decides whether a browser will render `/embed` in a frame.
-That is the whole of it:
+`frame-ancestors` decides whether a browser will render `/embed` in a frame. That is all it does:
 
-- **It does not protect `/api/chat`.** That endpoint is a public POST that spends
-  the deployment's model key. A server-to-server call, a reverse proxy that
-  strips the header, or opening `/embed` as a top-level page all reach it without
-  framing anything. `RATE_LIMIT_PER_WINDOW` is a per-address ceiling, not an
-  economic identity; there is no per-site quota or spend cap here.
-- **The deployed headers are what count.** A CDN or proxy can add a second CSP
-  (they intersect — an inherited `frame-ancestors 'self'` blocks the widget
-  everywhere) or restore `X-Frame-Options`. Check the response as served.
-- **The host site trusts whoever serves `widget.js`.** There is no
-  Subresource Integrity hash on that tag, and there deliberately cannot be a
-  useful one: the loader is meant to be updated without editing every site that
-  embeds it, and a pinned hash would break them all on the next change. That is
-  the normal trade for this class of widget, but it is a trade — put it on a
-  deployment you control, and treat write access to it as write access to every
-  page that embeds it.
+- **It does not protect `/api/chat`.** That endpoint is a public POST that spends the deployment's model key. A server-to-server call, a reverse proxy that strips the header, or opening `/embed` as a top-level page all reach it without framing anything. `RATE_LIMIT_PER_WINDOW` is a per-address ceiling (30 requests per 5 minutes by default); there is no per-site quota or spend cap.
+- **The deployed headers are what count.** A CDN or proxy can add a second CSP (the two intersect, so an inherited `frame-ancestors 'self'` blocks the widget everywhere) or restore `X-Frame-Options`. Check the response as served.
+- **The host site trusts whoever serves `widget.js`.** There is no Subresource Integrity hash on that tag, and a useful one is not possible: the loader is meant to be updated without editing every site that embeds it, and a pinned hash would break them all on the next change. That is the usual trade-off for this kind of widget. Host it on a deployment you control, and treat write access to it as write access to every page that embeds it.
 
 ---
 
 ## Limitations
 
-- **Local-embedding quality ceiling.** `all-MiniLM-L6-v2` is 384-dimensional and small. It is excellent for a zero-key, offline demo, but a hosted embedding model would lift recall on paraphrased queries. The eval misses are a direct, honest read of this ceiling.
-- **File-store scale.** The default store does an exact linear scan. Correct and quick here; switch to the pgvector adapter before you reach millions of vectors.
-- **Verifier is a heuristic.** Embedding-similarity attribution has real false positives and negation blindness (see the design note). It is a strong, cheap, offline proxy — not a guarantee of entailment or fact.
-- **Single-turn, no persistence.** By design: no auth, no accounts, no chat history persistence. The scope is deliberately RAG + verification quality, not SaaS plumbing.
+- **Local-embedding quality ceiling.** `all-MiniLM-L6-v2` is 384-dimensional and small. It works for a zero-key, offline demo, but a hosted embedding model would lift recall on paraphrased queries. The eval misses reflect this.
+- **Retrieval mode is per corpus.** Dense is the default because it scored higher on short, repetitive business pages; hybrid scores higher on the bundled books. Run the eval on your own corpus before choosing.
+- **File-store scale.** The default store does an exact linear scan. Switch to the pgvector adapter well before millions of vectors.
+- **Verifier is a heuristic.** Embedding-similarity attribution has false positives and negation blindness (see the design note). It does not establish entailment or factual accuracy.
+- **No accounts or stored history.** Conversation history lives in the browser and is sent with each request (capped at six turns). There is no auth and nothing is persisted server-side.
+- **Rate limiting is per instance.** The limiter keeps counters in process memory, so on a serverless deployment the effective ceiling is the limit times the number of instances.
 
 ---
 
 ## The sample corpus
 
-Three excerpts from clearly public-domain English works, retrieved from Project Gutenberg with its license boilerplate stripped (~160 KB total): Darwin's *On the Origin of Species* (1859), Lawson's 1920 English translation of Einstein's *Relativity*, and Strunk's *The Elements of Style* (1918). All predate 1929 and are in the US public domain; full provenance and the public-domain rationale — including why a *pre-1929* translation of the Einstein text matters — are in [`corpus/SOURCES.md`](corpus/SOURCES.md). Point `npm run ingest` at any directory of `.md`/`.txt` files to index your own.
+Three excerpts from public-domain English works, retrieved from Project Gutenberg with its license boilerplate stripped (~160 KB total): Darwin's *On the Origin of Species* (1859), Lawson's 1920 English translation of Einstein's *Relativity*, and Strunk's *The Elements of Style* (1918). All predate 1929 and are in the US public domain; full provenance and the public-domain rationale, including why a pre-1929 translation of the Einstein text matters, are in [`corpus/SOURCES.md`](corpus/SOURCES.md). Point `npm run ingest` at any directory of `.md`/`.txt` files to index your own.
 
 ---
 
@@ -274,11 +279,11 @@ Three excerpts from clearly public-domain English works, retrieved from Project 
 ```bash
 npm run typecheck     # tsc --noEmit (strict)
 npm run lint          # eslint
-npm test              # vitest (offline: chunking, store contract, verifier, chat route)
+npm test              # vitest, offline: 133 passing, 9 pgvector tests skipped without PGVECTOR_URL
 npm run build         # next build
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of the above on every push and PR.
+CI (`.github/workflows/ci.yml`) runs all of the above on every push to master and on pull requests.
 
 **Tech:** Next.js (App Router) + TypeScript strict · Transformers.js (local MiniLM) · Anthropic SDK (streaming) · Postgres/pgvector · vitest.
 
@@ -288,6 +293,9 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push and PR.
 |---|---|
 | ![Retrieval-only ranked passages with cosine scores](docs/screenshots/gc-02-retrieval.png) | ![Source panel showing the exact retrieved chunk](docs/screenshots/gc-04-panel.png) |
 
+## AI assistance
+This project was built with AI assistance (Claude Code). Commits it co-authored carry a `Co-Authored-By` trailer.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
