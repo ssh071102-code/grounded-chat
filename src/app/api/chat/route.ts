@@ -18,8 +18,8 @@ let limiter: RateLimiter | null = null;
  */
 function getLimiter(): RateLimiter {
   if (!limiter) {
-    // 30 in five minutes: a visitor with real questions asks a handful, and the
-    // acceptance harness puts twenty through in a burst, so both fit. A loop
+    // 30 in five minutes: a visitor with real questions asks a handful, and a
+    // scripted smoke test of twenty questions in a burst also fits. A loop
     // does not.
     const limit = Number(process.env.RATE_LIMIT_PER_WINDOW) || 30;
     const windowMs = (Number(process.env.RATE_LIMIT_WINDOW_SECONDS) || 300) * 1000;

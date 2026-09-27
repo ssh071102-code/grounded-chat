@@ -57,8 +57,8 @@ function intFromEnv(raw: string | undefined, fallback: number): number {
 }
 
 /**
- * Retrieval settings, all overridable per deployment. A white-label install
- * sits on someone else's corpus, and the right window size for a five-page
+ * Retrieval settings, all overridable per deployment. Each deployment indexes
+ * a different corpus, and the right window size for a five-page
  * trade site is not the right one for a fifty-page clinic.
  *
  * `RETRIEVAL_MODE=hybrid` turns on BM25 fusion. It is off by default because

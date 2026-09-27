@@ -57,10 +57,11 @@ export function resetLexicalCache(): void {
  * The single retrieval entry point.
  *
  * Hybrid is implemented and tested but is NOT the default: measured on the
- * 20-question golden set over the real customer corpus it lost to plain dense
- * retrieval at every per-document cap (dense recall@5 0.900 / MRR 0.779;
- * best hybrid 0.850 / 0.677). Fusion pulls near-duplicate suburb pages into
- * the window and pushes strong single-hit answers down. It stays available
+ * 20-question golden set over a small business-website corpus (not bundled)
+ * it lost to plain dense retrieval at every per-document cap (dense recall@5
+ * 0.900 / MRR 0.779; best hybrid 0.850 / 0.677). Fusion pulls near-duplicate
+ * location pages into the window and pushes strong single-hit answers down.
+ * On the bundled corpus the ranking flips; see the README eval section. It stays available
  * behind RETRIEVAL_MODE=hybrid for corpora shaped differently, and the numbers
  * above are why it is off. The chat route and the offline eval both
  * call this, so a number measured by the eval is a number the product will

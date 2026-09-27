@@ -225,7 +225,7 @@ describe("verifyAnswer, number words used as idiom", () => {
 
 describe("verifyAnswer, the closing invitation", () => {
   // Every answer ends with one, none of them appears in the pages verbatim,
-  // and none asserts anything about the world. Across five client corpora they
+  // and none asserts anything about the world. Across five test corpora they
   // were about four in ten of all flags, which teaches a reader that orange
   // means nothing.
   it("does not judge an invitation to make contact", async () => {

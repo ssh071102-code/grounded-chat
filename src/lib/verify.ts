@@ -163,8 +163,8 @@ const NON_ASSERTION = [
 
 /**
  * Ways of asking the reader to make contact. Every answer closes with one and
- * none of them appears in the pages word for word, so across five client
- * corpora they were about four flags in ten. A reader who sees orange on the
+ * none of them appears in the pages word for word, so across five test
+ * corpora of business web pages they were about four flags in ten. A reader who sees orange on the
  * closing line of every answer learns that orange means nothing.
  */
 const INVITATION: RegExp[] = [

@@ -18,11 +18,10 @@ coverage/
 
 # local demo corpora (not for the public repo yet)
 
-# Corpora crawled from real businesses, the golden and probe sets built from
-# them, and acceptance transcripts. This repository is public; those carry a
-# client's published text, their owner's name and their phone number, as well
-# as which businesses were looked at. The bundled corpus/ is public-domain
-# prose for exactly this reason.
+# Local test corpora crawled from third-party websites, and the golden and
+# probe sets built from them. They contain other people's published text and
+# contact details, so they stay out of this public repository. The bundled
+# corpus/ is public-domain prose for that reason.
 corpus-*/
 !corpus/
 scripts/golden-*.ts
@@ -42,7 +41,7 @@ models/
 
 .vercel
 
-# acceptance-run transcripts and scratch probes (regenerate with npm run answers)
+# local answer transcripts and scratch probes
 answers-*.txt
 cmp-*.txt
 cross-vertical.txt

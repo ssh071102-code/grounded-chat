@@ -11,7 +11,7 @@ import { FakeEmbedder } from "./helpers/fake-embedder";
 const embedder = new FakeEmbedder();
 
 /**
- * A miniature of the failure measured on a real customer corpus: the single
+ * A miniature of the failure measured on a crawled service-business corpus: the single
  * page that names the service verbatim is long and topically diluted, while
  * nine suburb landing pages repeat a short boilerplate line that shares most
  * of the query's common words. Vector similarity ranks the boilerplate first
@@ -130,7 +130,7 @@ describe("retrieve", () => {
 });
 
 /**
- * The failure actually measured on the customer corpus: one document supplies
+ * The failure measured on that corpus: one document supplies
  * several chunks that all beat the canonical page on vector similarity, so the
  * canonical page never enters the window. This is reproducible with any
  * embedder because it is about the shape of the corpus, not the model.

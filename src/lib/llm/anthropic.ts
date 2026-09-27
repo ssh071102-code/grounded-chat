@@ -3,8 +3,8 @@ import type { ChatTurn } from "../conversation";
 import type { LLMClient, SourcePassage } from "./types";
 
 /**
- * Default business name. A white-label install overrides it with BUSINESS_NAME;
- * the widget sits on the client's own site and answers in their name.
+ * Default business name. A deployment overrides it with BUSINESS_NAME, since
+ * the widget is embedded on that business's own site and answers in its name.
  */
 const DEFAULT_BUSINESS = "this business";
 
@@ -18,10 +18,8 @@ const DEFAULT_BUSINESS = "this business";
  * come from the same instruction, so the prompt bans the register outright and
  * gives the model somewhere to go when the pages fall short.
  *
- * The style bans mirror the outbound-copy gate in gig-radar
- * (gig_radar/brain/ai_tells.py) and are enforced after generation by
- * src/lib/answer-audit.ts, so a regression here fails a test instead of
- * reaching a customer.
+ * The dash ban is not left to the prompt alone: plainDashes() below
+ * normalises every streamed delta after generation.
  */
 export function buildSystemPrompt(business: string = DEFAULT_BUSINESS): string {
   return `You are the assistant on ${business}'s own website, talking to a customer who is on the page right now. You speak for the business.
@@ -58,7 +56,7 @@ Two to six sentences.`;
  * meaning, so it is normalised deterministically after the fact.
  *
  * Numeric ranges are left alone. "Mon–Fri 7am–5pm" is how a person sets a
- * range, and the outbound gate in gig-radar allows it for the same reason.
+ * range.
  */
 export function plainDashes(text: string): string {
   return text

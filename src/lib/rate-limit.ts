@@ -23,7 +23,7 @@ interface Window {
  * The chat endpoint is a public POST with no authentication, which is correct
  * for a widget on someone's website and means anyone can loop it. Every call
  * spends model tokens on whichever key the deployment carries, so without a
- * ceiling the first thing a bored visitor finds is the client's billing.
+ * ceiling the first thing a bored visitor finds is the deployment's bill.
  *
  * Deliberately not distributed. A serverless deployment runs several instances
  * and each keeps its own counters, so the effective ceiling is the limit times

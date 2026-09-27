@@ -118,7 +118,7 @@ export function Chat({ mode, model }: { mode: ChatMode; model: string }) {
   }, []);
 
   // The tab is part of the same screen as the masthead; leaving it on the
-  // previous client contradicts the name the widget is answering under.
+  // previous business name contradicts the name the widget is answering under.
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => {
       threadRef.current?.scrollTo({
@@ -495,7 +495,7 @@ function Readout({ verification }: { verification: Verification }) {
 function RetrievalOnly({ ex }: { ex: Exchange }) {
   return (
     <>
-      {/* A visitor to a client's site reads this. Setup instructions and the
+      {/* A visitor to the host site reads this. Setup instructions and the
           name of an environment variable belong in the README, not in front of
           somebody trying to find out whether you clean gutters. */}
       <div className="retrieval-note">

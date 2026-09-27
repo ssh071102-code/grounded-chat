@@ -13,8 +13,7 @@ describe("plainDashes", () => {
   });
 
   it("leaves a numeric range alone, which is correct typography", () => {
-    // Mon-Fri 7am-5pm written with en dashes is how a person sets a range,
-    // and the outbound gate in gig-radar deliberately allows it too.
+    // Mon-Fri 7am-5pm written with en dashes is how a person sets a range.
     const range = "Mon–Fri 7am–5pm";
     expect(plainDashes(range)).toBe(range);
   });

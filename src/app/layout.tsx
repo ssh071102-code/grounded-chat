@@ -10,9 +10,9 @@ import "@fontsource/newsreader/600.css";
 import "./globals.css";
 
 /**
- * White-label: a deployment sits on a client's own site, and a browser tab
- * reading "grounded-chat" puts our project name in front of their customers.
- * BUSINESS_NAME names the business the widget answers for.
+ * Page title. When the chat is embedded on a business's site, the tab should
+ * name that business rather than this project. BUSINESS_NAME names the
+ * business the widget answers for.
  */
 const BUSINESS = process.env.BUSINESS_NAME;
 

@@ -14,7 +14,7 @@ export interface FusedItem {
  * Fuse several ranked id lists into one. Fusion is on rank alone, never on
  * score: cosine similarity and BM25 live on incomparable scales, and any
  * attempt to weight them directly needs per-corpus calibration that a
- * white-label deployment has no way to perform.
+ * deployment on an unlabelled corpus has no way to perform.
  */
 export function rrfFuse(
   rankings: string[][],
@@ -43,7 +43,7 @@ export function rrfFuse(
  * Why this exists: trade and service sites repeat the same paragraph across
  * every suburb landing page. Without a cap, one boilerplate paragraph fills
  * the whole window and the single page that actually answers the question is
- * pushed out — measured on a real customer corpus, not hypothetical.
+ * pushed out. This was measured on a crawled service-business corpus.
  */
 export function capPerDoc<T extends { docId: string }>(
   items: T[],

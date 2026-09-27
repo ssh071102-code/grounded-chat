@@ -1,5 +1,5 @@
 /**
- * The one line an agency pastes into a client's site.
+ * The one line a site owner pastes into their page template.
  *
  *   <script src="https://YOUR-DEPLOYMENT/widget.js" defer></script>
  *
@@ -84,7 +84,7 @@
     if (!host.attachShadow) {
       // Falling back to a plain div was worse than not rendering: the
       // stylesheet below is written for a shadow root, so without one its
-      // `.wrap` / `.launch` / `.panel` rules escape into the client's page and
+      // `.wrap` / `.launch` / `.panel` rules escape into the host page and
       // restyle whatever already uses those class names.
       if (window.console) {
         console.warn("[grounded-chat] this browser has no shadow DOM; widget not loaded");

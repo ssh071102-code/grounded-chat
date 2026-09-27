@@ -7,7 +7,7 @@ function chunk(docId: string, index: number, text: string): Chunk {
 }
 
 /**
- * The shape that broke dense-only retrieval on a real customer site: one
+ * The shape that broke dense-only retrieval on a crawled service-business site: one
  * canonical services page carries the exact phrase, while nine near-identical
  * suburb pages restate the same idea in boilerplate. Dense similarity cannot
  * separate them; exact term statistics can.

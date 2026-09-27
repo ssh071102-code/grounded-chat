@@ -71,7 +71,7 @@ describe("parseHistory", () => {
 
   it("truncates a turn a caller made enormous, since history is client-supplied", () => {
     // The widget posts this back from the browser, so a hostile caller can put
-    // anything in it. Every turn costs input tokens on the client's key.
+    // anything in it. Every turn costs input tokens on the deployment's key.
     const kept = parseHistory([{ question: "x".repeat(9999), answer: "y".repeat(9999) }]);
     expect(kept[0]!.question.length).toBeLessThan(1000);
     expect(kept[0]!.answer.length).toBeLessThan(1000);
