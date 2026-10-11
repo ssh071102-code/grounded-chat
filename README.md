@@ -68,7 +68,7 @@ flowchart LR
 
   subgraph query["POST /api/chat"]
     q["question + recent turns"] --> emb2["local MiniLM\nembedding"]
-    emb2 --> knn["dense top-k\n(or hybrid: dense + BM25, RRF, 2/doc cap)"]
+    emb2 --> knn["dense top-k\n(or hybrid: dense + BM25, RRF, 2/doc preference)"]
     store --> knn
     knn -->|"no API key"| ro["retrieval-only\nJSON: passages + scores"]
     knn -->|"API key set"| gen["Anthropic SDK\nstreamed answer + [n] citations"]
@@ -82,7 +82,7 @@ The retrieval path is identical in both modes; only generation and verification 
 ### Retrieval modes
 
 - **Dense (default).** The query is embedded and the top-k chunks by cosine similarity are returned.
-- **Hybrid (`RETRIEVAL_MODE=hybrid`).** Dense and BM25 each return 20 candidates (`RETRIEVAL_CANDIDATES`), the two rankings are merged with reciprocal rank fusion, and no document may contribute more than two chunks (`RETRIEVAL_MAX_PER_DOC`). Scores shown in the UI stay cosine similarity, including for chunks only BM25 found.
+- **Hybrid (`RETRIEVAL_MODE=hybrid`).** Dense and BM25 each return 20 candidates (`RETRIEVAL_CANDIDATES`), the two rankings are merged with reciprocal rank fusion, and any chunk beyond a document's first two (`RETRIEVAL_MAX_PER_DOC`) is moved behind every other candidate. This favours variety across documents without capping it: when fewer than k candidates are left after demotion, the demoted chunks fill the remaining slots in fused order, so a single document can still supply all k results. Scores shown in the UI stay cosine similarity, including for chunks only BM25 found.
 
 The chat route and `npm run eval` call the same `retrieve()` function, so eval numbers describe the code path the app runs. Which mode wins depends on the corpus: hybrid scores higher on the bundled books (see Eval), while on a separate corpus of short business web pages, where many pages repeat the same boilerplate, dense scored higher. That is why the app defaults to dense.
 
@@ -150,7 +150,7 @@ The document names in parentheses during ingestion are each file's first heading
 
 `npm run eval` runs 15 golden question and relevant-passage pairs over the bundled corpus. Each question's anchor phrase is resolved to the ground-truth chunk(s) at eval time, the question is retrieved, and the rank of the first relevant chunk is scored. `npm run eval` scores hybrid retrieval unless you pass `--mode dense`.
 
-**Hybrid** (`--mode hybrid`, max 2 chunks per document):
+**Hybrid** (`--mode hybrid`, 2 chunks per document ranked first):
 
 | metric | k=3 | k=5 | k=10 |
 |---|---|---|---|
@@ -279,7 +279,7 @@ Three excerpts from public-domain English works, retrieved from Project Gutenber
 ```bash
 npm run typecheck     # tsc --noEmit (strict)
 npm run lint          # eslint
-npm test              # vitest, offline: 133 passing, 9 pgvector tests skipped without PGVECTOR_URL
+npm test              # vitest, offline: 134 passing, 9 pgvector tests skipped without PGVECTOR_URL
 npm run build         # next build
 ```
 
