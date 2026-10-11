@@ -121,6 +121,24 @@ describe("chunkDocument", () => {
     expect(titleOf("Comma fact 2")).toBe("Rules of usage");
   });
 
+  it("applies Markdown headings in line order when there are no blank lines", () => {
+    const text = [
+      "# Alpha",
+      "Alpha first sentence is here. Alpha second sentence is here.",
+      "## Beta",
+      "Beta first sentence is here. Beta second sentence is here.",
+    ].join("\n");
+    const chunks = chunkDocument("doc.md", "Doc", text, {
+      targetChars: 40,
+      overlapSentences: 0,
+    });
+    const titleOf = (needle: string) => chunks.find((c) => c.text.includes(needle))!.title;
+    expect(titleOf("Alpha first")).toBe("Alpha");
+    expect(titleOf("Alpha second")).toBe("Alpha");
+    expect(titleOf("Beta first")).toBe("Beta");
+    expect(titleOf("Beta second")).toBe("Beta");
+  });
+
   it("does not treat short lowercase lines or formulas as headings", () => {
     const text = ["INTRO", "image001", "_x′_ = _x_ – _vt_", "Body sentence one. Body two."].join("\n\n");
     const chunks = chunkDocument("doc.txt", "Doc", text, {

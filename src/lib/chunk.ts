@@ -98,6 +98,27 @@ export function headingOf(paragraph: string): string | null {
   return joined.replace(/\.$/, "");
 }
 
+const MARKDOWN_HEADING_LINE = /^\s*#{1,6}\s+\S/;
+
+/**
+ * Split a paragraph before every Markdown heading line that follows other
+ * text, so a heading only titles the lines below it even when no blank line
+ * separates sections. Paragraphs without such lines are returned unchanged.
+ */
+function splitAtMarkdownHeadings(paragraph: string): string[] {
+  const parts: string[] = [];
+  let current: string[] = [];
+  for (const line of paragraph.split(/\r?\n/)) {
+    if (MARKDOWN_HEADING_LINE.test(line) && current.some((l) => l.trim())) {
+      parts.push(current.join("\n"));
+      current = [];
+    }
+    current.push(line);
+  }
+  parts.push(current.join("\n"));
+  return parts;
+}
+
 /**
  * Split a document into chunks. `title` is the fallback title; each chunk is
  * titled with the nearest heading above its first new (non-overlap) sentence,
@@ -110,7 +131,7 @@ export function chunkDocument(
   options: ChunkOptions = DEFAULT_CHUNKING,
 ): Chunk[] {
   const { targetChars, overlapSentences } = options;
-  const paragraphs = text.split(/\r?\n\s*\r?\n+/);
+  const paragraphs = text.split(/\r?\n\s*\r?\n+/).flatMap(splitAtMarkdownHeadings);
 
   const sentences: { text: string; heading: string }[] = [];
   let heading = title;
