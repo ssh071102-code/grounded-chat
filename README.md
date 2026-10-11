@@ -164,7 +164,7 @@ The document names in parentheses during ingestion are each file's first heading
 | **recall@k** | 0.733 (11/15) | 0.800 (12/15) | 0.867 (13/15) |
 | **MRR** | 0.667 | 0.680 | 0.688 |
 
-Measured 2026-09-27 with `xenova/all-MiniLM-L6-v2` (quantized). In hybrid mode k=3 and k=5 tie because the per-document cap means widening from three to five pulls in no document the top three had not already reached.
+Measured 2026-09-27 with `xenova/all-MiniLM-L6-v2` (quantized). In hybrid mode recall is the same at k=3 and k=5: the two extra slots surface no additional target passages.
 
 With hybrid retrieval, eleven of fifteen questions retrieve their target passage at rank 1. The two misses at k=5 are paraphrased questions: *"What subject does Darwin devote the first chapter to?"* and *"How should terms in a series be punctuated?"*. A small 384-dimension local model does not match them closely enough (see Limitations). Both are found by k=10, at rank 6 and rank 7. To reproduce:
 
