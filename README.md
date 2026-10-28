@@ -293,9 +293,6 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push to master an
 |---|---|
 | ![Retrieval-only ranked passages with cosine scores](docs/screenshots/gc-02-retrieval.png) | ![Source panel showing the exact retrieved chunk](docs/screenshots/gc-04-panel.png) |
 
-## AI assistance
-This project was built with AI assistance (Claude Code). Commits it co-authored carry a `Co-Authored-By` trailer.
-
 ## License
 
 MIT, see [LICENSE](LICENSE).
